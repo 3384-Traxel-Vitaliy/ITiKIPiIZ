@@ -16,10 +16,15 @@ from grammar import (
 
 
 class Token:
-    def __init__(self, token_type, value, position):
+    def __init__(self, token_type, value, position, original=None):
         self.type = token_type
         self.value = value
         self.position = position
+        self.original = (
+            original
+            if original is not None
+            else value
+        )
 
     def __repr__(self):
         return (
@@ -35,6 +40,8 @@ class Lexer:
         self.morph = pymorphy3.MorphAnalyzer()
 
     def normalize_word(self, word):
+        word = word.lower()
+
         parsed = self.morph.parse(word)
 
         if parsed:
@@ -42,45 +49,16 @@ class Lexer:
 
         return word
 
-    def find_terminal_form(self, word):
-        word = word.lower()
-
-        # Латинская c считается русской "с"
-        if word == "c":
-            return "с"
-
-        all_terms = (
-            COMMANDS
-            | OBJECTS
-            | DISH_TYPES
-            | INGREDIENTS
-            | CUISINES
-            | COMPARISONS
-            | CONJUNCTIONS
-            | {WITH, KITCHEN, MINUTES}
-        )
-
-        if word in all_terms:
-            return word
-
-        normal = self.normalize_word(word)
-
-        for term in all_terms:
-            term_normal = self.normalize_word(term)
-
-            if normal == term_normal:
-                return term
-
-        return word
-
     def classify_word(self, word):
+
         if word in COMMANDS:
             return "COMMAND"
 
-        if word in {"рецепты", "блюда"}:
+        if word in {"рецепт", "блюдо"}:
             return "OBJECT"
 
-        if word in {"десерты", "супы", "салаты"}:
+        # Эти слова могут выступать как объект или как тип блюда.
+        if word in {"десерт", "суп", "салат"}:
             return "OBJECT_OR_DISH_TYPE"
 
         if word in INGREDIENTS:
@@ -95,7 +73,7 @@ class Lexer:
         if word in CONJUNCTIONS:
             return "CONJUNCTION"
 
-        if word in {"завтраки", "обеды", "ужины"}:
+        if word in {"завтрак", "обед", "ужин"}:
             return "DISH_TYPE"
 
         if word == WITH:
@@ -113,20 +91,30 @@ class Lexer:
         return "UNKNOWN"
 
     def tokenize(self, text):
-        words = re.findall(r"\S+", text.strip())
+
+        words = re.findall(
+            r"\S+",
+            text.strip()
+        )
+
         tokens = []
 
         for position, original_word in enumerate(words):
-            word = original_word.lower()
 
-            terminal = self.find_terminal_form(word)
-            token_type = self.classify_word(terminal)
+            normalized_word = self.normalize_word(
+                original_word
+            )
+
+            token_type = self.classify_word(
+                normalized_word
+            )
 
             tokens.append(
                 Token(
                     token_type,
-                    terminal,
-                    position
+                    normalized_word,
+                    position,
+                    original_word
                 )
             )
 
