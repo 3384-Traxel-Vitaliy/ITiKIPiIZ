@@ -4,7 +4,7 @@ from preprocessing import norm
 
 
 def build_word_index(dictionary):
-    # Создаём индекс слов по первой букве и длине
+    # Индексируем слова по первой букве и длине
     index = defaultdict(list)
 
     for word in dictionary:
@@ -14,67 +14,90 @@ def build_word_index(dictionary):
     return index
 
 
-@lru_cache(maxsize=100000)
+@lru_cache(maxsize=200000)
 def levenshtein(a, b):
-    # Если слова одинаковые, расстояние равно нулю
+    # Одинаковые слова
     if a == b:
         return 0
 
+    # Пустые слова
     if not a:
         return len(b)
 
     if not b:
         return len(a)
 
+    # При расстоянии 1 длина должна отличаться
+    # не более чем на один символ
+    if abs(len(a) - len(b)) > 1:
+        return 2
+
+    # Короткое слово помещаем в b
     if len(a) < len(b):
         a, b = b, a
 
+    # Вместо полной матрицы считаем только
+    # три соседние диагонали
     previous = list(range(len(b) + 1))
 
-    # Вычисляем расстояние Левенштейна
     for i, char_a in enumerate(a, 1):
-        current = [i]
+        current = [2] * (len(b) + 1)
 
-        for j, char_b in enumerate(b, 1):
-            current.append(min(
+        # Начальное значение
+        current[0] = i
+
+        # При расстоянии 1 смотрим только соседние позиции
+        start = max(1, i - 1)
+        end = min(len(b), i + 1)
+
+        for j in range(start, end + 1):
+            current[j] = min(
                 current[j - 1] + 1,
                 previous[j] + 1,
-                previous[j - 1] + (char_a != char_b)
-            ))
+                previous[j - 1] + (char_a != b[j - 1])
+            )
+
+        # Если минимальное расстояние в строке уже больше 1,
+        # дальнейший расчёт не нужен
+        if min(current[start:end + 1]) > 1:
+            return 2
 
         previous = current
 
-    return previous[-1]
+    return previous[len(b)]
 
 
 def find_similar(word, word_index, max_distance=1, limit=5):
-    # Нормализуем искомое слово
+    # Нормализуем слово
     word = norm(word)
 
     if not word:
         return []
 
+    word_length = len(word)
+    first_letter = word[0]
+
     candidates = []
 
-    # Ищем слова близкой длины
-    for length in range(
-        max(1, len(word) - max_distance),
-        len(word) + max_distance + 1
-    ):
+    # При max_distance=1 проверяем только три длины
+    min_length = max(1, word_length - max_distance)
+    max_length = word_length + max_distance
+
+    for length in range(min_length, max_length + 1):
+
+        # Берём только слова с такой же первой буквой
         for candidate in word_index.get(
-            (word[0], length), ()
+            (first_letter, length),
+            ()
         ):
             distance = levenshtein(word, candidate)
 
             if distance <= max_distance:
                 candidates.append((candidate, distance))
 
-    # Сортируем по степени похожести
-    candidates.sort(
-        key=lambda x: (
-            x[1],
-            abs(len(x[0]) - len(word))
-        )
-    )
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda x: x[1])
 
     return candidates[:limit]

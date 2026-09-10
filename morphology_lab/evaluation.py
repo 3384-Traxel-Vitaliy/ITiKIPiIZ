@@ -8,22 +8,20 @@ def evaluate(analyzer, filename):
     data = read_conllu(filename)
 
     # Получаем уникальные слова для анализа
-    unique_words = {
-        form for form, _, _ in data
-    }
+    unique_words = {form for form, _, _ in data}
 
     # Анализируем каждое слово один раз
     predictions = {
         word: analyzer.analyze_word(word)
-        for word in tqdm(
-            unique_words,
-            desc="Анализ слов"
-        )
+        for word in tqdm(unique_words, desc="Анализ слов")
     }
 
     lemma_correct = 0
     pos_correct = 0
     joint_correct = 0
+
+    # Сохраняем примеры неправильного анализа
+    errors = []
 
     # Сравниваем предсказания с правильными значениями
     for form, true_lemma, true_pos in data:
@@ -35,6 +33,12 @@ def evaluate(analyzer, filename):
         lemma_correct += lemma_ok
         pos_correct += pos_ok
         joint_correct += lemma_ok and pos_ok
+
+        # Запоминаем ошибки для последующего вывода
+        if not (lemma_ok and pos_ok) and len(errors) < 20:
+            errors.append(
+                (form, true_lemma, true_pos, pred_lemma, pred_pos)
+            )
 
     total = len(data)
 
@@ -48,5 +52,18 @@ def evaluate(analyzer, filename):
     print(f"Лемма: {results['lemma']:.2f}%")
     print(f"POS: {results['pos']:.2f}%")
     print(f"Лемма + POS: {results['joint']:.2f}%")
+
+    # Выводим примеры неправильной классификации
+    print("\n=== ПРИМЕРЫ ОШИБОК ===")
+
+    if errors:
+        for word, true_lemma, true_pos, pred_lemma, pred_pos in errors:
+            print(
+                f"{word:20} -> "
+                f"правильно: {true_lemma:20} {true_pos:7} | "
+                f"получено: {pred_lemma:20} {pred_pos:7}"
+            )
+    else:
+        print("Ошибок не найдено.")
 
     return results
