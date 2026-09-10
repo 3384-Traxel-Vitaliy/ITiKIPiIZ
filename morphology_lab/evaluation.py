@@ -20,8 +20,10 @@ def evaluate(analyzer, filename):
     pos_correct = 0
     joint_correct = 0
 
-    # Сохраняем максимум 50 ошибок
-    errors = []
+    # Отдельные категории ошибок
+    lemma_errors = []       # лемма неверная, POS верный
+    pos_errors = []         # лемма верная, POS неверный
+    joint_errors = []       # лемма и POS неверные
 
     # Сравниваем предсказания с правильными значениями
     for form, true_lemma, true_pos in data:
@@ -34,11 +36,17 @@ def evaluate(analyzer, filename):
         pos_correct += pos_ok
         joint_correct += lemma_ok and pos_ok
 
-        # Сохраняем ошибку
-        if not (lemma_ok and pos_ok) and len(errors) < 50:
-            errors.append(
-                (form, true_lemma, true_pos, pred_lemma, pred_pos)
-            )
+        error = (form, true_lemma, true_pos, pred_lemma, pred_pos)
+
+        # Раскладываем ошибки по категориям
+        if not lemma_ok and pos_ok:
+            lemma_errors.append(error)
+
+        elif lemma_ok and not pos_ok:
+            pos_errors.append(error)
+
+        elif not lemma_ok and not pos_ok:
+            joint_errors.append(error)
 
     total = len(data)
 
@@ -53,16 +61,34 @@ def evaluate(analyzer, filename):
     print(f"POS: {results['pos']:.2f}%")
     print(f"Лемма + POS: {results['joint']:.2f}%")
 
-    # Выводим ошибки компактно
-    print("\n=== ОШИБКИ (макс. 50) ===")
+    def print_errors(title, errors, limit=20):
+        print(f"\n=== {title} (макс. {limit}) ===")
 
-    if errors:
-        for word, true_lemma, true_pos, pred_lemma, pred_pos in errors:
-            print(
-                f"{word} → {true_lemma}/{true_pos} | "
-                f"{pred_lemma}/{pred_pos}"
-            )
-    else:
-        print("Ошибок не найдено.")
+        if errors:
+            for word, true_lemma, true_pos, pred_lemma, pred_pos in errors[:limit]:
+                print(
+                    f"{word} → {true_lemma}/{true_pos} | "
+                    f"{pred_lemma}/{pred_pos}"
+                )
+        else:
+            print("Ошибок не найдено.")
+
+    # Сначала 20 ошибок только по лемме
+    print_errors(
+        "ОШИБКИ: НЕ СОВПАДАЕТ ЛЕММА, POS ВЕРНЫЙ",
+        lemma_errors
+    )
+
+    # Затем 20 ошибок только по POS
+    print_errors(
+        "ОШИБКИ: ЛЕММА ВЕРНА, НЕ СОВПАДАЕТ POS",
+        pos_errors
+    )
+
+    # Затем 20 ошибок, где неверны и лемма, и POS
+    print_errors(
+        "ОШИБКИ: НЕ СОВПАДАЮТ ЛЕММА И POS",
+        joint_errors
+    )
 
     return results
