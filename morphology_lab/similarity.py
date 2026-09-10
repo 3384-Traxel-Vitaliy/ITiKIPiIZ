@@ -4,100 +4,61 @@ from preprocessing import norm
 
 
 def build_word_index(dictionary):
-    # Индексируем слова по первой букве и длине
     index = defaultdict(list)
-
     for word in dictionary:
         if word:
             index[(word[0], len(word))].append(word)
-
     return index
 
 
 @lru_cache(maxsize=200000)
-def levenshtein(a, b):
-    # Одинаковые слова
+def levenshtein_one(a, b):
     if a == b:
         return 0
 
-    # Пустые слова
-    if not a:
-        return len(b)
-
-    if not b:
-        return len(a)
-
-    # При расстоянии 1 длина должна отличаться
-    # не более чем на один символ
-    if abs(len(a) - len(b)) > 1:
+    len_a, len_b = len(a), len(b)
+    if abs(len_a - len_b) > 1:
         return 2
 
-    # Короткое слово помещаем в b
-    if len(a) < len(b):
+    if len_a == len_b:
+        differences = sum(char_a != char_b for char_a, char_b in zip(a, b))
+        return 2 if differences > 1 else differences
+
+    if len_a < len_b:
         a, b = b, a
+        len_a, len_b = len_b, len_a
 
-    # Вместо полной матрицы считаем только
-    # три соседние диагонали
-    previous = list(range(len(b) + 1))
+    i = j = differences = 0
 
-    for i, char_a in enumerate(a, 1):
-        current = [2] * (len(b) + 1)
+    while i < len_a and j < len_b:
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+        else:
+            differences += 1
+            if differences > 1:
+                return 2
+            i += 1
 
-        # Начальное значение
-        current[0] = i
-
-        # При расстоянии 1 смотрим только соседние позиции
-        start = max(1, i - 1)
-        end = min(len(b), i + 1)
-
-        for j in range(start, end + 1):
-            current[j] = min(
-                current[j - 1] + 1,
-                previous[j] + 1,
-                previous[j - 1] + (char_a != b[j - 1])
-            )
-
-        # Если минимальное расстояние в строке уже больше 1,
-        # дальнейший расчёт не нужен
-        if min(current[start:end + 1]) > 1:
-            return 2
-
-        previous = current
-
-    return previous[len(b)]
+    return 1
 
 
 def find_similar(word, word_index, max_distance=1, limit=5):
-    # Нормализуем слово
     word = norm(word)
-
     if not word:
         return []
 
-    word_length = len(word)
-    first_letter = word[0]
-
+    length, first_letter = len(word), word[0]
     candidates = []
 
-    # При max_distance=1 проверяем только три длины
-    min_length = max(1, word_length - max_distance)
-    max_length = word_length + max_distance
+    for candidate_length in (length - 1, length, length + 1):
+        if candidate_length <= 0:
+            continue
 
-    for length in range(min_length, max_length + 1):
-
-        # Берём только слова с такой же первой буквой
-        for candidate in word_index.get(
-            (first_letter, length),
-            ()
-        ):
-            distance = levenshtein(word, candidate)
-
+        for candidate in word_index.get((first_letter, candidate_length), ()):
+            distance = levenshtein_one(word, candidate)
             if distance <= max_distance:
                 candidates.append((candidate, distance))
 
-    if not candidates:
-        return []
-
-    candidates.sort(key=lambda x: x[1])
-
+    candidates.sort(key=lambda item: item[1])
     return candidates[:limit]
