@@ -44,15 +44,6 @@ class MorphologicalAnalyzer:
             self.cache[word] = result
             return result
 
-        if self.use_morphology:
-            from morphology import guess_pos, guess_lemma
-            pos = guess_pos(normalized)
-
-            if pos != "NOUN":
-                result = (guess_lemma(normalized, pos), pos)
-                self.cache[word] = result
-                return result
-
         if self.use_levenshtein:
             from similarity import find_similar
             similar = find_similar(normalized, self.word_index)
