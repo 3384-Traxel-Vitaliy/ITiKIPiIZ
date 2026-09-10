@@ -20,7 +20,7 @@ def evaluate(analyzer, filename):
     pos_correct = 0
     joint_correct = 0
 
-    # Сохраняем примеры неправильного анализа
+    # Сохраняем максимум 50 ошибок
     errors = []
 
     # Сравниваем предсказания с правильными значениями
@@ -34,15 +34,15 @@ def evaluate(analyzer, filename):
         pos_correct += pos_ok
         joint_correct += lemma_ok and pos_ok
 
-        # Запоминаем ошибки для последующего вывода
-        if not (lemma_ok and pos_ok) and len(errors) < 20:
+        # Сохраняем ошибку
+        if not (lemma_ok and pos_ok) and len(errors) < 50:
             errors.append(
                 (form, true_lemma, true_pos, pred_lemma, pred_pos)
             )
 
     total = len(data)
 
-    # Рассчитываем точность анализа
+    # Рассчитываем точность
     results = {
         "lemma": lemma_correct / total * 100,
         "pos": pos_correct / total * 100,
@@ -53,15 +53,14 @@ def evaluate(analyzer, filename):
     print(f"POS: {results['pos']:.2f}%")
     print(f"Лемма + POS: {results['joint']:.2f}%")
 
-    # Выводим примеры неправильной классификации
-    print("\n=== ПРИМЕРЫ ОШИБОК ===")
+    # Выводим ошибки компактно
+    print("\n=== ОШИБКИ (макс. 50) ===")
 
     if errors:
         for word, true_lemma, true_pos, pred_lemma, pred_pos in errors:
             print(
-                f"{word:20} -> "
-                f"правильно: {true_lemma:20} {true_pos:7} | "
-                f"получено: {pred_lemma:20} {pred_pos:7}"
+                f"{word} → {true_lemma}/{true_pos} | "
+                f"{pred_lemma}/{pred_pos}"
             )
     else:
         print("Ошибок не найдено.")

@@ -20,8 +20,7 @@ class MorphologicalAnalyzer:
     @staticmethod
     def _has_latin(word):
         """
-        Проверяет, содержит ли слово хотя бы одну
-        латинскую букву.
+        Проверяет, содержит ли слово хотя бы одну латинскую букву.
         """
         return bool(re.search(r"[A-Za-z]", word))
 
@@ -33,8 +32,7 @@ class MorphologicalAnalyzer:
         if not word:
             return "", "X"
 
-        # Если слово содержит латиницу,
-        # считаем его неизвестной частью речи X
+        # Если слово содержит латиницу, считаем его неизвестной частью речи X
         if self._has_latin(original):
             return word, "X"
 
@@ -69,8 +67,7 @@ class MorphologicalAnalyzer:
                         key=lambda x: x[1]
                     )[0]
 
-            # Если точного варианта по POS нет,
-            # берём самый частый вариант
+            # Если точного варианта по POS нет, берём самый частый вариант
             return self.dictionary[
                 similar[0][0]
             ].most_common(1)[0][0]
@@ -86,13 +83,15 @@ class MorphologicalAnalyzer:
         if word in self.cache:
             return self.cache[word]
 
-        # Если слово содержит латинские буквы,
-        # сразу определяем его как X
+        # Если слово содержит латинские буквы, сразу определяем его как X
         if self._has_latin(word):
             result = (word, "X")
 
             self.cache[word] = result
             return result
+
+        if word.isdigit():
+            return word, "NUM"
 
         normalized = norm(word)
 
@@ -117,18 +116,11 @@ class MorphologicalAnalyzer:
         return result
 
     def analyze_text(self, text):
-        """
-        Анализируем русские и латинские токены.
-
-        Русские слова анализируются морфологически.
-        Слова с латиницей получают POS = X.
-        """
-
         result = []
 
         for token in tokenize(text):
 
-            # Латиница -> X
+            # Латиница - X
             if self._has_latin(token):
                 result.append(
                     (token, token, "X")

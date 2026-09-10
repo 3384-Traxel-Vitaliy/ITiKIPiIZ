@@ -138,7 +138,7 @@ def guess_lemma(word, pos):
                 continue
 
             # Если слово уже в начальной форме, оставляем его
-            if ending in ("ый", "ий", "ой"):
+            if ending in ("ый", "ий"):
                 return word
 
             stem = word[:-len(ending)]
