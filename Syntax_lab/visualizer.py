@@ -2,10 +2,15 @@ class TreeVisualizer:
 
     @staticmethod
     def print_tree(node):
-        print(node.name, end="")
+        print(
+            node.name,
+            end=""
+        )
 
         if node.value is not None:
-            print(f": {node.value}")
+            print(
+                f": {node.value}"
+            )
         else:
             print()
 
@@ -15,9 +20,14 @@ class TreeVisualizer:
         )
 
     @staticmethod
-    def _print_children(children, prefix):
+    def _print_children(
+        children,
+        prefix
+    ):
         for index, child in enumerate(children):
-            is_last = index == len(children) - 1
+            is_last = (
+                index == len(children) - 1
+            )
 
             if is_last:
                 branch = "└── "
@@ -32,7 +42,9 @@ class TreeVisualizer:
             )
 
             if child.value is not None:
-                print(f": {child.value}")
+                print(
+                    f": {child.value}"
+                )
             else:
                 print()
 

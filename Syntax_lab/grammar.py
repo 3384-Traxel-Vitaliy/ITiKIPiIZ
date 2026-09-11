@@ -7,9 +7,7 @@ COMMANDS = {
 OBJECTS = {
     "рецепт",
     "блюдо",
-    "десерт",
-    "суп",
-    "салат"
+    "список"
 }
 
 DISH_TYPES = {
@@ -48,10 +46,20 @@ COMPARISONS = {
 }
 
 CONJUNCTIONS = {
-    "и",
-    "или"
+    "и"
 }
 
-WITH = "с"
+PREPOSITIONS = {
+    "с",
+    "из"
+}
+
 KITCHEN = "кухня"
+
 MINUTES = "минута"
+
+HOUR = "час"
+
+SEPARATORS = {
+    ","
+}

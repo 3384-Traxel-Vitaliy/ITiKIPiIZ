@@ -1,11 +1,14 @@
 from errors import SyntaxError
 
 from nodes import (
+    Node,
     QueryNode,
     CommandNode,
     ObjectSpecNode,
     ObjectNode,
     FiltersNode,
+    IngredientCuisineFilterNode,
+    IngredientGroupNode,
     IngredientFilterNode,
     CuisineFilterNode,
     TimeFilterNode,
@@ -15,7 +18,8 @@ from nodes import (
     ComparisonNode,
     NumberNode,
     DishTypeNode,
-    ConjunctionNode
+    ConjunctionNode,
+    HourNode
 )
 
 
@@ -36,13 +40,22 @@ class Parser:
         token = self.current_token
 
         if token.type != token_type:
-            raise SyntaxError(message, token)
+            raise SyntaxError(
+                message,
+                token
+            )
 
         self.advance()
+
         return token
 
     def parse_query(self):
+        """
+        <query> ::= <command> <object_spec>
+        """
+
         command = self.parse_command()
+
         object_spec = self.parse_object_spec()
 
         if self.current_token.type != "EOF":
@@ -51,20 +64,42 @@ class Parser:
                 self.current_token
             )
 
-        return QueryNode(command, object_spec)
+        return QueryNode(
+            command,
+            object_spec
+        )
 
     def parse_command(self):
+        """
+        <command> ::= "найти" | "показать" | "вывести"
+        """
+
         token = self.expect(
             "COMMAND",
             "Ожидалась команда"
         )
 
-        return CommandNode(token.value)
+        return CommandNode(
+            token.value
+        )
 
     def parse_object_spec(self):
-        object_node = self.parse_object()
+        """
+        <object_spec> ::= <object> <filters> | <dish_type> <filters>
+        """
 
-        # Фильтр обязателен
+        if self.current_token.type == "OBJECT":
+            object_node = self.parse_object()
+
+        elif self.current_token.type == "DISH_TYPE":
+            object_node = self.parse_object_dish_type()
+
+        else:
+            raise SyntaxError(
+                "Ожидался объект или тип блюда",
+                self.current_token
+            )
+
         filters = self.parse_filters()
 
         return ObjectSpecNode(
@@ -73,87 +108,196 @@ class Parser:
         )
 
     def parse_object(self):
-        token = self.current_token
+        """
+        <object> ::= "рецепт" | "блюдо" | "список"
+        """
 
-        if token.type == "OBJECT":
-            self.advance()
-            return ObjectNode(token.value)
+        token = self.expect(
+            "OBJECT",
+            "Ожидался объект запроса"
+        )
 
-        if token.type == "OBJECT_OR_DISH_TYPE":
-            self.advance()
-            return ObjectNode(token.value)
+        return ObjectNode(
+            token.value
+        )
 
-        raise SyntaxError(
-            "Ожидался объект запроса",
-            token
+    def parse_object_dish_type(self):
+        """
+        <dish_type> непосредственно после команды.
+        """
+
+        token = self.expect(
+            "DISH_TYPE",
+            "Ожидался тип блюда"
+        )
+
+        return DishTypeNode(
+            token.value
         )
 
     def parse_filters(self):
-        children = []
+        """
+        <filters> ::= <ingredient_cuisine_filter> | <cuisine_time_filter> | <other_filter>
+        """
 
-        first_filter = self.parse_filter()
-        children.append(first_filter)
+        if self.current_token.type == "PREPOSITION":
+            first_filter = (
+                self.parse_ingredient_cuisine_filter()
+            )
 
-        while True:
-            # Фильтры с союзом:
-            # с грибами и русской кухни
-            if self.current_token.type == "CONJUNCTION":
-                conjunction_token = self.current_token
-                self.advance()
+        elif self.current_token.type == "CUISINE":
+            first_filter = (
+                self.parse_cuisine_time_filter()
+            )
 
-                children.append(
-                    ConjunctionNode(
-                        conjunction_token.value
+        elif self.current_token.type in {
+            "COMPARISON",
+            "DISH_TYPE"
+        }:
+            first_filter = (
+                self.parse_other_filter()
+            )
+
+        else:
+            raise SyntaxError(
+                "Ожидался фильтр",
+                self.current_token
+            )
+
+        return FiltersNode(
+            [first_filter]
+        )
+
+    def parse_ingredient_cuisine_filter(self):
+        """
+        <ingredient_cuisine_filter> ::= <ingredient_filter> <ingredient_tail> <cuisine_opt> <time_opt>
+        """
+
+        first_ingredient = (
+            self.parse_ingredient_filter()
+        )
+
+        ingredients = [
+            first_ingredient
+        ]
+
+        self.parse_ingredient_tail(
+            ingredients
+        )
+
+        ingredient_group = IngredientGroupNode(
+            ingredients
+        )
+
+        cuisine_filter = None
+
+        if self.current_token.type == "CUISINE":
+            cuisine_filter = (
+                self.parse_cuisine_filter()
+            )
+
+        time_filter = None
+
+        if self.current_token.type == "COMPARISON":
+            time_filter = (
+                self.parse_time_filter()
+            )
+
+        return IngredientCuisineFilterNode(
+            ingredient_group,
+            cuisine_filter,
+            time_filter
+        )
+
+    def parse_ingredient_tail(self, children):
+        """
+        <ingredient_tail> ::= <ingredient_separator> <ingredient> <ingredient_tail> | ε
+        """
+
+        while self.current_token.type in {
+            "CONJUNCTION",
+            "COMMA"
+        }:
+
+            separator_token = (
+                self.current_token
+            )
+
+            self.advance()
+
+            children.append(
+                ConjunctionNode(
+                    separator_token.value
+                )
+            )
+
+            ingredient_token = self.expect(
+                "INGREDIENT",
+                "Ожидался ингредиент после разделителя"
+            )
+
+            children.append(
+                IngredientFilterNode(
+                    IngredientNode(
+                        ingredient_token.value
                     )
                 )
+            )
 
-                next_filter = self.parse_filter()
-                children.append(next_filter)
+    def parse_cuisine_time_filter(self):
+        """
+        <cuisine_time_filter> ::= <cuisine_filter> <time_opt>
+        """
 
-            # Последующий фильтр без союза:
-            # русской кухни быстрее 40 минут
-            elif self.current_token.type in {
-                "WITH",
-                "CUISINE",
-                "COMPARISON",
-                "DISH_TYPE",
-                "OBJECT_OR_DISH_TYPE"
-            }:
-                next_filter = self.parse_filter()
-                children.append(next_filter)
+        cuisine_filter = (
+            self.parse_cuisine_filter()
+        )
 
-            else:
-                break
+        time_filter = None
 
-        return FiltersNode(children)
+        if self.current_token.type == "COMPARISON":
+            time_filter = (
+                self.parse_time_filter()
+            )
 
-    def parse_filter(self):
-        token_type = self.current_token.type
+        children = [
+            cuisine_filter
+        ]
 
-        if token_type == "WITH":
-            return self.parse_ingredient_filter()
+        if time_filter is not None:
+            children.append(
+                time_filter
+            )
 
-        if token_type == "CUISINE":
-            return self.parse_cuisine_filter()
+        return Node(
+            "CuisineTimeFilter",
+            children=children
+        )
 
-        if token_type == "COMPARISON":
+    def parse_other_filter(self):
+        """
+        <other_filter> ::= <time_filter> | <type_filter>
+        """
+
+        if self.current_token.type == "COMPARISON":
             return self.parse_time_filter()
 
-        if token_type in {
-            "DISH_TYPE",
-            "OBJECT_OR_DISH_TYPE"
-        }:
+        if self.current_token.type == "DISH_TYPE":
             return self.parse_type_filter()
 
         raise SyntaxError(
-            "Ожидался фильтр",
+            "Ожидался фильтр времени или тип блюда",
             self.current_token
         )
 
     def parse_ingredient_filter(self):
+        """
+        <ingredient_filter> ::= <preposition> <ingredient>
+        """
+
         self.expect(
-            "WITH",
-            "Ожидалось 'с'"
+            "PREPOSITION",
+            "Ожидался предлог 'с' или 'из'"
         )
 
         token = self.expect(
@@ -161,11 +305,19 @@ class Parser:
             "Ожидался ингредиент"
         )
 
-        ingredient = IngredientNode(token.value)
+        ingredient = IngredientNode(
+            token.value
+        )
 
-        return IngredientFilterNode(ingredient)
+        return IngredientFilterNode(
+            ingredient
+        )
 
     def parse_cuisine_filter(self):
+        """
+        <cuisine_filter> ::= <cuisine> "кухня"
+        """
+
         cuisine_token = self.expect(
             "CUISINE",
             "Ожидалось название кухни"
@@ -173,17 +325,33 @@ class Parser:
 
         self.expect(
             "KITCHEN",
-            "Ожидалось слово 'кухни'"
+            "Ожидалось слово 'кухня'"
         )
 
-        cuisine = CuisineNode(cuisine_token.value)
+        cuisine = CuisineNode(
+            cuisine_token.value
+        )
 
-        return CuisineFilterNode(cuisine)
+        return CuisineFilterNode(
+            cuisine
+        )
 
     def parse_time_filter(self):
+        """
+        <time_filter> ::= <comparison> <number> <time_unit>
+
+        <time_unit> ::= "минута" | "час" <minutes_opt>
+
+        <minutes_opt> ::= <number> "минута" | ε
+        """
+
         comparison_token = self.expect(
             "COMPARISON",
             "Ожидалось сравнение"
+        )
+
+        comparison = ComparisonNode(
+            comparison_token.value
         )
 
         number_token = self.expect(
@@ -191,40 +359,75 @@ class Parser:
             "Ожидалось число"
         )
 
+        if self.current_token.type == "MINUTES":
+            self.advance()
+
+            minutes = NumberNode(
+                number_token.value
+            )
+
+            return TimeFilterNode(
+                comparison,
+                minutes=minutes
+            )
+
+        if self.current_token.type == "HOUR":
+            self.advance()
+
+            hours = HourNode(
+                number_token.value
+            )
+
+            minutes = (
+                self.parse_optional_minutes()
+            )
+
+            return TimeFilterNode(
+                comparison,
+                hours=hours,
+                minutes=minutes
+            )
+
+        raise SyntaxError(
+            "Ожидалось слово 'минута' или 'час'",
+            self.current_token
+        )
+
+    def parse_optional_minutes(self):
+        """
+        <minutes_opt> ::= <number> "минута" | ε
+        """
+
+        if self.current_token.type != "NUMBER":
+            return None
+
+        number_token = self.current_token
+
+        self.advance()
+
         self.expect(
             "MINUTES",
-            "Ожидалось слово 'минут'"
+            "Ожидалось слово 'минута'"
         )
 
-        comparison = ComparisonNode(
-            comparison_token.value
-        )
-
-        number = NumberNode(
+        return NumberNode(
             number_token.value
         )
 
-        return TimeFilterNode(
-            comparison,
-            number
-        )
-
     def parse_type_filter(self):
-        token = self.current_token
+        """
+        <type_filter> ::= <dish_type>
+        """
 
-        if token.type not in {
+        token = self.expect(
             "DISH_TYPE",
-            "OBJECT_OR_DISH_TYPE"
-        }:
-            raise SyntaxError(
-                "Ожидался тип блюда",
-                token
-            )
-
-        self.advance()
+            "Ожидался тип блюда"
+        )
 
         dish_type = DishTypeNode(
             token.value
         )
 
-        return TypeFilterNode(dish_type)
+        return TypeFilterNode(
+            dish_type
+        )

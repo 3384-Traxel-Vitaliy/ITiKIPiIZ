@@ -9,14 +9,22 @@ from grammar import (
     CUISINES,
     COMPARISONS,
     CONJUNCTIONS,
+    PREPOSITIONS,
     MINUTES,
-    WITH,
-    KITCHEN
+    HOUR,
+    KITCHEN,
+    SEPARATORS
 )
 
 
 class Token:
-    def __init__(self, token_type, value, position, original=None):
+    def __init__(
+        self,
+        token_type,
+        value,
+        position,
+        original=None
+    ):
         self.type = token_type
         self.value = value
         self.position = position
@@ -50,16 +58,14 @@ class Lexer:
         return word
 
     def classify_word(self, word):
-
         if word in COMMANDS:
             return "COMMAND"
 
-        if word in {"рецепт", "блюдо"}:
+        if word in OBJECTS:
             return "OBJECT"
 
-        # Эти слова могут выступать как объект или как тип блюда.
-        if word in {"десерт", "суп", "салат"}:
-            return "OBJECT_OR_DISH_TYPE"
+        if word in DISH_TYPES:
+            return "DISH_TYPE"
 
         if word in INGREDIENTS:
             return "INGREDIENT"
@@ -73,11 +79,8 @@ class Lexer:
         if word in CONJUNCTIONS:
             return "CONJUNCTION"
 
-        if word in {"завтрак", "обед", "ужин"}:
-            return "DISH_TYPE"
-
-        if word == WITH:
-            return "WITH"
+        if word in PREPOSITIONS:
+            return "PREPOSITION"
 
         if word == KITCHEN:
             return "KITCHEN"
@@ -85,15 +88,20 @@ class Lexer:
         if word == MINUTES:
             return "MINUTES"
 
+        if word == HOUR:
+            return "HOUR"
+
+        if word in SEPARATORS:
+            return "COMMA"
+
         if word.isdigit():
             return "NUMBER"
 
         return "UNKNOWN"
 
     def tokenize(self, text):
-
         words = re.findall(
-            r"\S+",
+            r"[А-Яа-яЁё]+|\d+|,",
             text.strip()
         )
 
@@ -101,9 +109,12 @@ class Lexer:
 
         for position, original_word in enumerate(words):
 
-            normalized_word = self.normalize_word(
-                original_word
-            )
+            if original_word == ",":
+                normalized_word = ","
+            else:
+                normalized_word = self.normalize_word(
+                    original_word
+                )
 
             token_type = self.classify_word(
                 normalized_word
